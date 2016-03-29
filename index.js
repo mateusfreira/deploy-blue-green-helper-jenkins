@@ -1,9 +1,10 @@
 const Q = require('q'),
   _ = require('lodash'),
   rp = require('request-promise'),
-  jenkinsapi = require('jenkins-api');
+  jenkinsapi = require('jenkins-api'),
+  deployerManager = require("deploy-blue-green-helper");
 
-var JenkinsDeployer = function (jenkinsOption) {
+var JenkinsDeployer = function (jenkinsOption, enviromentOptions) {
   const jenkins = jenkinsapi.init(jenkinsOption.jenkinsUrl),
     self = this,
     log = function (message) {
@@ -13,9 +14,9 @@ var JenkinsDeployer = function (jenkinsOption) {
     };
 
   this.getBuildInfo = function () {
-    log("geting BuildInfo ");
+    log(["geting BuildInfo ", enviromentOptions]);
     var defer = Q.defer();
-    jenkins.last_build_info(jenkinsOption.jobName, function (err, data) {
+    jenkins.last_build_info(enviromentOptions.jobName, function (err, data) {
       log(["BuildInfo reponse", err, data]);
       if (err) {
         defer.reject(err);
@@ -27,14 +28,14 @@ var JenkinsDeployer = function (jenkinsOption) {
   };
 
   this.run = function () {
-    log("Ruining build " + jenkinsOption.jobName);
+    log("Ruining build " + enviromentOptions.jobName);
     var defer = Q.defer();
-    jenkins.build(jenkinsOption.jobName, function (err, data) {
+    jenkins.build(enviromentOptions.jobName, function (err, data) {
       if (!err) {
-        log(["No errors ruining build " + jenkinsOption.jobName, data]);
+        log(["No errors ruining build " + enviromentOptions.jobName, data]);
         defer.resolve(data);
       } else {
-        log(["Some error happen ruining build " + jenkinsOption.jobName, err]);
+        log(["Some error happen ruining build " + enviromentOptions.jobName, err]);
         defer.reject(err);
       }
     });
@@ -42,16 +43,16 @@ var JenkinsDeployer = function (jenkinsOption) {
   };
 
   this.stop = function (userOptions) {
-    log(["Stoping build " + jenkinsOption.jobName]);
+    log(["Stoping build " + enviromentOptions.jobName]);
     var defer = Q.defer();
     self.getBuildInfo().then(function (data) {
       try {
-        jenkins.stop_build(jenkinsOption.jobName, data.number, function (e, r) {
+        jenkins.stop_build(enviromentOptions.jobName, data.number, function (e, r) {
           if (!e) {
-            log(["No errors stoping build " + jenkinsOption.jobName]);
+            log(["No errors stoping build " + enviromentOptions.jobName]);
             defer.resolve(r);
           } else {
-            log(["Some error happen stoping build " + jenkinsOption.jobName, e]);
+            log(["Some error happen stoping build " + enviromentOptions.jobName, e]);
             defer.reject(e);
           }
 
@@ -65,6 +66,7 @@ var JenkinsDeployer = function (jenkinsOption) {
   };
 
   this.isRuning = function (userOptions) {
+
     return this.getBuildInfo().then(function (data) {
       return data.building;
     });
@@ -72,8 +74,20 @@ var JenkinsDeployer = function (jenkinsOption) {
 };
 
 
+const createADeployer = function (jenkinsOptions, envOptions) {
+  return _.assignIn(_.clone(envOptions), {
+    deployer: new JenkinsDeployer(jenkinsOptions, envOptions)
+  });
+};
+
 module.exports = {
-  create: function (userOptions) {
-    return new JenkinsDeployer(userOptions);
+  create: function (jenkinsOptions, blueOptions, greenOptions) {
+    const jenkinsBlueOptions = createADeployer(jenkinsOptions, blueOptions);
+    const jenkinsGreenOptions = createADeployer(jenkinsOptions, greenOptions);
+    return {
+      deploy: function () {
+        return deployerManager.deploy(jenkinsBlueOptions, jenkinsGreenOptions);
+      }
+    };
   }
-}
+};

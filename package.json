@@ -13,6 +13,7 @@
   "author": "Mateus Freira dos Santso <mateus.freira@gmail.com> (http://www.github.com/mateusfreira)",
   "license": "MIT",
   "dependencies": {
+    "deploy-blue-green-helper": "0.0.1",
     "jenkins-api": "^0.2.8",
     "lodash": "^4.6.1",
     "q": "^1.4.1"
